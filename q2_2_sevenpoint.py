@@ -1,7 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
-from helper import displayEpipolarF, calc_epi_error, toHomogenous, _singularize
+from helper import displayEpipolarF, calc_epi_error, toHomogenous, _singularize, refineF
 
 # Insert your package here
 
@@ -25,11 +25,69 @@ Q2.2: Seven Point Algorithm for calculating the fundamental matrix
 """
 
 
+def _linear_comb(alpha, F1, F2):
+    return np.linalg.det(alpha * F1 + (1-alpha) * F2)
+
 def sevenpoint(pts1, pts2, M):
     Farray = []
     # ----- TODO -----
     # YOUR CODE HERE
-    raise NotImplementedError()
+
+    num_pts = pts1.shape[0]
+    T = np.zeros((3,3))
+    T[0,0] = 1./M
+    T[1,1] = 1./M
+    T[2,2] = 1.
+
+    pts1 = pts1 / M
+    pts2 = pts2 / M
+    x1 = pts1[:,0]
+    x2 = pts2[:,0]
+    y1 = pts1[:,1]
+    y2 = pts2[:,1]
+
+    A = np.ones((num_pts, 9))
+    A[:, 0] = x2 * x1
+    A[:, 1] = x2 * y1
+    A[:, 2] = x2
+    A[:, 3] = y2 * x1
+    A[:, 4] = y2 * y1
+    A[:, 5] = y2
+    A[:, 6] = x1
+    A[:, 7] = y1
+
+    _, _, V_T = np.linalg.svd(A)
+    F1 = V_T[-2, :].reshape((3,3))
+    F2 = V_T[-1, :].reshape((3,3))
+
+    # calculate co-efficients
+    t1 = _linear_comb(0, F1, F2)
+    t2 = _linear_comb(1, F1, F2)
+    t3 = _linear_comb(-1, F1, F2)
+    t4 = _linear_comb(2, F1, F2)
+    t5 = _linear_comb(-2, F1, F2)
+    t6 = _linear_comb(3, F1, F2)
+    d = t1
+    b = (t2 + t3 - 2*d)/2
+    a = (2*t6 - 3*t4 - 6*b + d)/30
+    c = (t4 - d - 4*b - 8*a)/2
+
+    # d1 = t1
+    # c1 = (2/3)*(t2 - t3) - ((t4-t5)/12)
+    # b1 = 0.5*t2 + 0.5*t3 - t1
+    # a1 = (-1/6)*(t2 - t3) + (t4-t5)/12
+
+    roots = np.roots([a,b,c,d])
+    real_roots = roots[np.isreal(roots)]
+
+    for root in real_roots:
+        F = root*F1 + (1-root)*F2
+        F = _singularize(F)
+        F = refineF(F, pts1, pts2)
+        F_norm = np.matmul(T.T, np.matmul(F, T))
+        F_norm = F_norm/F_norm[2,2]
+        Farray.append(F_norm)
+
     return Farray
 
 
@@ -53,11 +111,11 @@ if __name__ == "__main__":
 
     F = Farray[0]
 
-    np.savez("q2_2.npz", F, M)
+    np.savez("results/q2_2.npz", F, M)
 
     # fundamental matrix must have rank 2!
     # assert(np.linalg.matrix_rank(F) == 2)
-    displayEpipolarF(im1, im2, F)
+    # displayEpipolarF(im1, im2, F)
 
     # Simple Tests to verify your implementation:
     # Test out the seven-point algorithm by randomly sampling 7 points and finding the best solution.
@@ -92,3 +150,5 @@ if __name__ == "__main__":
     assert F[2, 2] == 1
     assert np.linalg.matrix_rank(F) == 2
     assert np.mean(calc_epi_error(pts1_homogenous, pts2_homogenous, F)) < 1
+
+    displayEpipolarF(im1, im2, F)

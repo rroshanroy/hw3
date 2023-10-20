@@ -28,7 +28,43 @@ def eightpoint(pts1, pts2, M):
     # Replace pass by your implementation
     # ----- TODO -----
     # YOUR CODE HERE
-    pass
+    num_pts = pts1.shape[0]
+
+    T = np.zeros((3,3))
+    T[0,0] = 1/M
+    T[1,1] = 1/M
+    T[2,2] = 1
+
+    pts1 = pts1 / M
+    pts2 = pts2 / M
+
+    x1 = pts1[:,0]
+    x2 = pts2[:,0]
+    y1 = pts1[:,1]
+    y2 = pts2[:,1]
+
+    A = np.ones((num_pts, 9))
+    A[:, 0] = x2 * x1
+    A[:, 1] = x2 * y1
+    A[:, 2] = x2
+    A[:, 3] = y2 * x1
+    A[:, 4] = y2 * y1
+    A[:, 5] = y2
+    A[:, 6] = x1
+    A[:, 7] = y1
+    # A[:, 8] is already populated
+
+    
+    _, _, V_T = np.linalg.svd(A)
+    F = V_T[-1, :].reshape((3,3))
+
+    F = _singularize(F)
+    F = refineF(F, pts1, pts2)
+
+    F_norm = np.matmul(T, np.matmul(F, T))
+    F_norm = F_norm/F_norm[2,2]
+
+    return F_norm
 
 
 if __name__ == "__main__":
@@ -40,6 +76,7 @@ if __name__ == "__main__":
     im2 = plt.imread("data/im2.png")
 
     F = eightpoint(pts1, pts2, M=np.max([*im1.shape, *im2.shape]))
+    np.save("results/q2_1.npz", F)
 
     # Q2.1
     displayEpipolarF(im1, im2, F)
@@ -51,3 +88,5 @@ if __name__ == "__main__":
     assert F[2, 2] == 1
     assert np.linalg.matrix_rank(F) == 2
     assert np.mean(calc_epi_error(pts1_homogenous, pts2_homogenous, F)) < 1
+
+
