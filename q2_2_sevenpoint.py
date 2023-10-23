@@ -111,7 +111,7 @@ if __name__ == "__main__":
 
     F = Farray[0]
 
-    np.savez("results/q2_2.npz", F, M)
+    np.savez("results/q2_2", F, M)
 
     # fundamental matrix must have rank 2!
     # assert(np.linalg.matrix_rank(F) == 2)
