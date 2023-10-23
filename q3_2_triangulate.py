@@ -1,7 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
-from helper import camera2
+from helper import camera2, toHomogenous
 from q2_1_eightpoint import eightpoint
 from q3_1_essential_matrix import essentialMatrix
 
@@ -31,8 +31,42 @@ def triangulate(C1, pts1, C2, pts2):
     # Replace pass by your implementation
     # ----- TODO -----
     # YOUR CODE HERE
+    pts1 = toHomogenous(pts1)
+    pts2 = toHomogenous(pts2)
 
-    raise NotImplementedError()
+    p1_1, p1_2, p1_3 = C1[0], C1[1], C1[2]
+    p2_1, p2_2, p2_3 = C2[0], C2[1], C2[2]
+    #X = np.zeros((len(pts1), 3))
+
+    err = 0
+    i=0
+    P = np.zeros((len(pts1), 3))
+    
+    for pt1, pt2 in zip(pts1, pts2):
+        A = np.zeros((4,4))
+        # constructing A matrix
+        A[0] = pt2[1]*p2_3 - p2_2
+        A[1] = p2_1 - pt2[0]*p2_3
+        A[2] = pt1[1]*p1_3 - p1_2
+        A[3] = p1_1 - pt1[0]*p1_3
+
+        _, _, V_T = np.linalg.svd(A, 0)
+        X = V_T[-1]  # extract last row from V_T matrix or last column from V matrix
+        X = X/X[-1]
+
+        
+        # calculate reprojection error
+        projx1 = np.matmul(C1, X)
+        projx2 = np.matmul(C2, X)
+        projx1 = (projx1 / projx1[-1])[:-1]
+        projx2 = (projx2 / projx2[-1])[:-1]
+
+        err += np.linalg.norm(projx1 - pt1[:-1])**2 + np.linalg.norm(projx2 - pt2[:-1])**2
+        # err += np.linalg.norm(projx1 - pt1)**2 + np.linalg.norm(projx2 - pt2)**2
+
+        P[i] = X[:-1]
+        i +=1
+    
     return P, err
 
 
@@ -64,7 +98,23 @@ def findM2(F, pts1, pts2, intrinsics, filename="q3_3.npz"):
     # ----- TODO -----
     # YOUR CODE HERE
 
-    raise NotImplementedError()
+
+    K1, K2 = intrinsics["K1"], intrinsics["K2"]
+
+    E = essentialMatrix(F, K1, K2)
+    M2s = camera2(E)
+    M1 = np.concatenate([np.identity(3), np.zeros((3,1))], axis=1)
+    err_min = np.inf
+    P = None
+
+    for i in range(M2s.shape[-1]):
+        M2 = M2s[:, :, i]
+        C1 = np.matmul(K1, M1)
+        C2 = np.matmul(K2, M2)
+        Pcur, err = triangulate(C1, pts1, C2, pts2)
+        if err < err_min: 
+            err_min = err
+            P = Pcur
 
     return M2, C2, P
 
