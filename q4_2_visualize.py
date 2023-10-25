@@ -32,7 +32,16 @@ Q4.2: Finding the 3D position of given points based on epipolar correspondence a
 def compute3D_pts(temple_pts1, intrinsics, F, im1, im2):
     # ----- TODO -----
     # YOUR CODE HERE
-    raise NotImplementedError()
+    n = temple_pts1.shape[0]
+    temple_pts2 = np.zeros_like(temple_pts1)
+
+    i=0
+    for pt in temple_pts1:
+        temple_pts2[i] = epipolarCorrespondence(im1, im2, F, pt[0], pt[1])
+        i+=1
+
+    M2, C2, P = findM2(F, temple_pts1, temple_pts2, intrinsics)
+    
     return P
 
 
@@ -67,6 +76,6 @@ if __name__ == "__main__":
     P = compute3D_pts(temple_pts1, intrinsics, F, im1, im2)
 
     # Visualize
-    fig = plt.figure()
-    ax = Axes3D(fig)
+    # fig = plt.figure()
+    # ax = Axes3D(fig)
     plot_3D(P)

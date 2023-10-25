@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 from helper import _epipoles
 
 from q2_1_eightpoint import eightpoint
+from scipy.ndimage import gaussian_filter
 
 # Insert your package here
 
@@ -95,6 +96,8 @@ def epipolarCorrespondence(im1, im2, F, x1, y1):
     # Given input [x1, x2], use the fundamental matrix to recover the corresponding epipolar line on image2
     hom_x1 = np.array([x1, y1, 1], dtype=float)
     a, b, c = np.matmul(F, hom_x1)
+    # print(a, b, c)
+    #ax + by + c = 0
     
     # (2) Search along this line to check nearby pixel intensity (you can define a search window) to  find the best matches
     h = im1.shape[0]
@@ -106,12 +109,67 @@ def epipolarCorrespondence(im1, im2, F, x1, y1):
     win_x2 = x1 - win
     win_y1 = y1 + win
     win_y2 = y1 - win
-    window_x1 = im1[win_y2:win_y1, win_x2:win_x1]
+    target_crop = im1[win_y2:win_y1, win_x2:win_x1]
     #window_x1 = im1[y1 - win:y1 + win, x1 - win:x1 + win]
 
+    slope = -a/b
+    img_slope = h/w
+    space = 40
+    if np.absolute(slope) < img_slope:
+        x2_start = max(x1-space, win_x2)
+        x2_end = min(x1+space, win_x1)
 
+        x_range = np.arange(x2_start, x2_end, 1)
+        min_err = np.inf
+        min_x, min_y = None, None
+        for x in x_range:
+            y = int(-(c + a*x)/b)
+            # print(f"x: {x}, y: {y}")
 
-    print("Done")
+            w_x1 = int(x + win)
+            w_x2 = int(x - win)
+            w_y1 = int(y + win)
+            w_y2 = int(y - win)
+
+            cur_crop = im2[w_y2:w_y1, w_x2:w_x1]
+
+            delta_window = cur_crop - target_crop
+            error = gaussian_filter(np.absolute(delta_window).mean(), sigma=31)
+            # print(f"Error: {error}, x2: {(w_x1, w_y1)}, x1: {(w_x2, w_y2)}")
+
+            if error < min_err:
+                min_err = error
+                min_x = x
+                min_y = y
+
+    else :
+        y2_start = y1-space
+        y2_end = y1+space
+
+        y_range = np.arange(y2_start, y2_end, 1)
+        min_err = np.inf
+        min_x, min_y = None, None
+        for y in y_range:
+            x = int(-(c + b*y)/a)
+            # print(f"x: {x}, y: {y}")  
+
+            w_x1 = int(x + win)
+            w_x2 = int(x - win)
+            w_y1 = int(y + win)
+            w_y2 = int(y - win)
+
+            cur_crop = im2[w_y2:w_y1, w_x2:w_x1]
+
+            delta_window = cur_crop - target_crop
+            error = gaussian_filter(np.absolute(delta_window).mean(), sigma=31)
+            # print(f"Error: {error}, x2: {(w_x1, w_y1)}, x1: {(w_x2, w_y2)}")
+
+            if error < min_err:
+                min_err = error
+                min_x = x
+                min_y = y
+
+    return min_x, min_y
 
 
 if __name__ == "__main__":
@@ -125,7 +183,7 @@ if __name__ == "__main__":
     F = eightpoint(pts1, pts2, M=np.max([*im1.shape, *im2.shape]))
 
     np.savez("results/q4_1.npz", F, pts1, pts2)
-    #epipolarMatchGUI(im1, im2, F)
+    epipolarMatchGUI(im1, im2, F)
 
     # Simple Tests to verify your implementation:
     x2, y2 = epipolarCorrespondence(im1, im2, F, 119, 217)
