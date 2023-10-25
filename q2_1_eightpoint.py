@@ -75,8 +75,9 @@ if __name__ == "__main__":
     im1 = plt.imread("data/im1.png")
     im2 = plt.imread("data/im2.png")
 
-    F = eightpoint(pts1, pts2, M=np.max([*im1.shape, *im2.shape]))
-    np.save("results/q2_1.npz", F)
+    M = np.max([*im1.shape, *im2.shape])
+    F = eightpoint(pts1, pts2, M=M)
+    np.savez("results/q2_1", F, M)
 
     # Q2.1
     displayEpipolarF(im1, im2, F)
