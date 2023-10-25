@@ -91,8 +91,27 @@ def epipolarCorrespondence(im1, im2, F, x1, y1):
     # Replace pass by your implementation
     # ----- TODO -----
     # YOUR CODE HERE
-    raise NotImplementedError
-    pass
+
+    # Given input [x1, x2], use the fundamental matrix to recover the corresponding epipolar line on image2
+    hom_x1 = np.array([x1, y1, 1], dtype=float)
+    a, b, c = np.matmul(F, hom_x1)
+    
+    # (2) Search along this line to check nearby pixel intensity (you can define a search window) to  find the best matches
+    h = im1.shape[0]
+    w = im1.shape[1]
+
+    # create x1 window of search
+    win = 5
+    win_x1 = x1 + win
+    win_x2 = x1 - win
+    win_y1 = y1 + win
+    win_y2 = y1 - win
+    window_x1 = im1[win_y2:win_y1, win_x2:win_x1]
+    #window_x1 = im1[y1 - win:y1 + win, x1 - win:x1 + win]
+
+
+
+    print("Done")
 
 
 if __name__ == "__main__":
@@ -105,8 +124,8 @@ if __name__ == "__main__":
 
     F = eightpoint(pts1, pts2, M=np.max([*im1.shape, *im2.shape]))
 
-    np.savez("q4_1.npz", F, pts1, pts2)
-    epipolarMatchGUI(im1, im2, F)
+    np.savez("results/q4_1.npz", F, pts1, pts2)
+    #epipolarMatchGUI(im1, im2, F)
 
     # Simple Tests to verify your implementation:
     x2, y2 = epipolarCorrespondence(im1, im2, F, 119, 217)
