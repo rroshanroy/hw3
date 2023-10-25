@@ -108,7 +108,7 @@ def findM2(F, pts1, pts2, intrinsics, filename="q3_3.npz"):
     P = None
 
     for i in range(M2s.shape[-1]):
-        M2 = M2s[:, :, i]
+        M2 = M2s[:, :, 0]
         C1 = np.matmul(K1, M1)
         C2 = np.matmul(K2, M2)
         Pcur, err = triangulate(C1, pts1, C2, pts2)
@@ -130,6 +130,7 @@ if __name__ == "__main__":
     F = eightpoint(pts1, pts2, M=np.max([*im1.shape, *im2.shape]))
 
     M2, C2, P = findM2(F, pts1, pts2, intrinsics)
+    np.savez("q3_3", M2, C2, P)
 
     # Simple Tests to verify your implementation:
     M1 = np.hstack((np.identity(3), np.zeros(3)[:, np.newaxis]))
