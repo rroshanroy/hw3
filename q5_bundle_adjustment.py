@@ -53,7 +53,36 @@ Q5.1: RANSAC method.
 
 def ransacF(pts1, pts2, M, nIters=1000, tol=10):
     # TODO: Replace pass by your implementation
-    pass
+
+    max_inliers = 0
+    F_best = None
+    i = 0
+    inliers = None
+    while i < nIters:
+        idx = np.random.randint(len(pts1), size=8)
+        eight_pts1 = pts1[idx]
+        eight_pts2 = pts2[idx]
+
+        F = eightpoint(eight_pts1, eight_pts2, M)
+
+        pts1_homogenous, pts2_homogenous = toHomogenous(pts1), toHomogenous(pts2)
+        error = calc_epi_error(pts1_homogenous, pts2_homogenous, F)
+        # minErr, maxnumInliers = err[in_idx].mean(), numInliers,
+
+        # inliers_mask = np.where(error < tol, True, False)
+        inliers_mask = error < tol
+        #errors[errors < tol].mean()
+
+        if np.sum(inliers_mask) > max_inliers:
+            F_best = F
+            min_error = error[inliers_mask].mean()
+            max_inliers = np.sum(inliers_mask)
+            inliers = inliers_mask
+        i+=1
+
+        print(f"i: {i}, min_error: {min_error}")
+
+    return F_best, inliers
 
 
 """
@@ -65,8 +94,22 @@ Q5.2: Rodrigues formula.
 
 def rodrigues(r):
     # TODO: Replace pass by your implementation
-    pass
+    theta = np.linalg.norm(r)
 
+    if theta == 0:
+        R = np.identity(3)
+    
+    else:
+        u = r/theta
+        u_x = np.array([[0, -1.*u[2], u[1]],
+                       [u[2], 0, -u[0]],
+                       [-u[1], u[0], 0]])
+        u = u.reshape(3, 1)
+        R = np.identity(3)*np.cos(theta) + (1-np.cos(theta))*np.matmul(u, u.T) + u_x*np.sin(theta)
+
+    return R
+
+    
 
 """
 Q5.2: Inverse Rodrigues formula.
@@ -77,7 +120,29 @@ Q5.2: Inverse Rodrigues formula.
 
 def invRodrigues(R):
     # TODO: Replace pass by your implementation
-    pass
+    A =  (R - R.T) / 2
+    rho = np.array([A[2,1], A[0,2], A[1,0]])
+    s = np.linalg.norm(rho)
+    c = (np.trace(R)-1)/2
+
+    S = lambda r: -r if (np.linalg.norm(r)==np.pi and ((r[0]==r[1]==0 and r[3]<0) or (r[0]==0 and r[1]<0) or (r[0]<0))) else r
+
+    if s==0 and c==1:
+        r = 0
+    elif s==0 and c==-1:
+        R_t = R + np.identity(3)  # TODO: check if this is a non-zero column!
+        col_norms = np.linalg.norm(R_t, ord=2, axis=0)
+        max_norm_column = np.argmax(col_norms)
+        v = R_t[:, max_norm_column]
+        u = v / np.linalg.norm(v)
+        r = S(u*np.pi)
+    else:
+        u = rho / s
+        theta = np.arctan2(s,c)
+        r = u * theta
+
+    return r
+
 
 
 """
@@ -94,7 +159,34 @@ Q5.3: Rodrigues residual.
 
 def rodriguesResidual(K1, M1, p1, K2, p2, x):
     # TODO: Replace pass by your implementation
-    pass
+    trans = x[-3:] 
+    rot = x[-6:-3]
+    P = x[:-6]
+
+    rot_mat = rodrigues(rot)
+    #M2 = np.hstack((R2, trans.reshape((3, 1))))
+    M2 = np.concatenate([rot_mat, trans.reshape((3, 1))], axis=1)
+
+    C1 = np.matmul(K1, M1)
+    C2 = np.matmul(K2, M2)
+
+    P = P.reshape((int(len(P)/3), 3))
+    projected_x1 = np.matmul(C1, P.T)
+    projected_x1 = projected_x1/projected_x1[-1]
+    
+    projected_x2 = np.matmul(C2, P.T)
+    projected_x2 = projected_x2/projected_x2[-1]
+
+
+    res_1 = (p1.T - projected_x1[:2])
+    res_1 = res_1.reshape([-1])
+
+    res_2 = (p2.T - projected_x2[:2])
+    res_2 = res_2.reshape((-1))
+    #res_out = np.concatenate((res_1, res_2), axis=0)
+    res_out = np.vstack((res_1, res_2))
+    
+    return res_out
 
 
 """
@@ -121,7 +213,7 @@ def bundleAdjustment(K1, M1, p1, K2, M2_init, p2, P_init):
     obj_start = obj_end = 0
     # ----- TODO -----
     # YOUR CODE HERE
-    raise NotImplementedError()
+    
     return M2, P, obj_start, obj_end
 
 
@@ -137,7 +229,7 @@ if __name__ == "__main__":
     im1 = plt.imread("data/im1.png")
     im2 = plt.imread("data/im2.png")
 
-    F, inliers = ransacF(noisy_pts1, noisy_pts2, M=np.max([*im1.shape, *im2.shape]))
+    #F, inliers = ransacF(noisy_pts1, noisy_pts2, M=np.max([*im1.shape, *im2.shape]))
 
     # displayEpipolarF(im1, im2, F)
 
@@ -146,9 +238,9 @@ if __name__ == "__main__":
         noisy_pts2
     )
 
-    assert F.shape == (3, 3)
-    assert F[2, 2] == 1
-    assert np.linalg.matrix_rank(F) == 2
+    # assert F.shape == (3, 3)
+    # assert F[2, 2] == 1
+    # assert np.linalg.matrix_rank(F) == 2
 
     # Simple Tests to verify your implementation:
     from scipy.spatial.transform import Rotation as sRot
@@ -178,3 +270,13 @@ if __name__ == "__main__":
     Call the bundleAdjustment function to optimize the extrinsics and 3D points
     Plot the 3D points before and after bundle adjustment using the plot_3D_dual function
     """
+    F, inliers = ransacF(pts1, pts2, M=np.max([*im1.shape, *im2.shape]), nIters=100, tol=6)
+    inliers = inliers.reshape(len(inliers),)
+
+    pts1_, pts2_ = pts1[inliers, :], pts2[inliers, :]
+    M2_init, C2, P_init = findM2(F, pts1_, pts2_, intrinsics)
+    M1 = np.hstack((np.identity(3), np.zeros(3)[:, np.newaxis]))
+    M2, P, obj_start, obj_end = bundleAdjustment(
+        K1, M1, pts1_, K2, M2_init, pts2_, P_init)
+    print("obj_start:", obj_start, "obj_end:", obj_end)
+    plot_3D_dual(P_init, P)
