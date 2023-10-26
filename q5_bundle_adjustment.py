@@ -161,30 +161,32 @@ def rodriguesResidual(K1, M1, p1, K2, p2, x):
     # TODO: Replace pass by your implementation
     trans = x[-3:] 
     rot = x[-6:-3]
-    P = x[:-6]
+    pts_3d = x[:-6]
 
     rot_mat = rodrigues(rot)
-    #M2 = np.hstack((R2, trans.reshape((3, 1))))
-    M2 = np.concatenate([rot_mat, trans.reshape((3, 1))], axis=1)
+    M2 = np.concatenate([rot_mat, trans[:, np.newaxis]], axis=1)
 
     C1 = np.matmul(K1, M1)
     C2 = np.matmul(K2, M2)
 
-    P = P.reshape((int(len(P)/3), 3))
-    projected_x1 = np.matmul(C1, P.T)
-    projected_x1 = projected_x1/projected_x1[-1]
+    pts_3d = pts_3d.reshape((int(len(pts_3d)/3), 3))
+    pts_3d_hom = np.concatenate([pts_3d, np.ones((pts_3d.shape[0], 1))], axis=1) # N x 4
+
+    projected_x1 = np.matmul(C1, pts_3d_hom.T)
+    #projected_x1 = projected_x1/projected_x1[-1]
+    projected_x1 = (projected_x1/projected_x1[-1])[:-1].T
     
-    projected_x2 = np.matmul(C2, P.T)
-    projected_x2 = projected_x2/projected_x2[-1]
+    projected_x2 = np.matmul(C2, pts_3d_hom.T)
+    #projected_x2 = projected_x2/projected_x2[-1]
+    projected_x2 = (projected_x2/projected_x2[-1])[:-1].T
 
+    res_1 = (p1 - projected_x1)
+    res_1 = res_1.reshape(-1)
 
-    res_1 = (p1.T - projected_x1[:2])
-    res_1 = res_1.reshape([-1])
-
-    res_2 = (p2.T - projected_x2[:2])
-    res_2 = res_2.reshape((-1))
-    #res_out = np.concatenate((res_1, res_2), axis=0)
-    res_out = np.vstack((res_1, res_2))
+    res_2 = (p2 - projected_x2)
+    res_2 = res_2.reshape(-1)
+    
+    res_out = np.hstack((res_1, res_2))
     
     return res_out
 
@@ -210,11 +212,35 @@ Q5.3 Bundle adjustment.
 
 
 def bundleAdjustment(K1, M1, p1, K2, M2_init, p2, P_init):
-    obj_start = obj_end = 0
     # ----- TODO -----
     # YOUR CODE HERE
+
+    # extract rotation and translation matrices
+    trans = M2_init[..., -1]
+    rot = M2_init[..., :-1]
+
+    rot_vec = invRodrigues(rot)
+
+    # packing all the unknowns in one vector
+    P_init_flat = P_init.reshape(P_init.shape[0]*P_init.shape[1])
+    x = np.concatenate((P_init_flat, rot_vec, trans))
+
+    residual_start = rodriguesResidual(K1, M1, p1, K2, p2, x)
     
-    return M2, P, obj_start, obj_end
+    opt_fn = lambda x, K1, M1, p1, K2, p2: np.linalg.norm(rodriguesResidual(K1, M1, p1, K2, p2, x))**2
+    x_hat = scipy.optimize.minimize(opt_fn, x, args=(K1, M1, p1, K2, p2), method="Powell").x
+
+    residual_final = rodriguesResidual(K1, M1, p1, K2, p2, x_hat)
+    trans_final = x_hat[-3:]
+    rot_vec_final = x_hat[-6:-3]
+    rot_final = rodrigues(rot_vec_final)
+    P_final = x_hat[:-6]
+    P_final = P_final.reshape((int(len(P_final)/3), 3))
+    
+    M2_final = np.concatenate((rot_final, trans_final[:, np.newaxis]), axis=1)
+    
+    return M2_final, P_final, residual_start, residual_final
+
 
 
 if __name__ == "__main__":
@@ -229,18 +255,18 @@ if __name__ == "__main__":
     im1 = plt.imread("data/im1.png")
     im2 = plt.imread("data/im2.png")
 
-    #F, inliers = ransacF(noisy_pts1, noisy_pts2, M=np.max([*im1.shape, *im2.shape]))
+    F, inliers = ransacF(noisy_pts1, noisy_pts2, M=np.max([*im1.shape, *im2.shape]))
 
-    # displayEpipolarF(im1, im2, F)
+    displayEpipolarF(im1, im2, F)
 
     # Simple Tests to verify your implementation:
     pts1_homogenous, pts2_homogenous = toHomogenous(noisy_pts1), toHomogenous(
         noisy_pts2
     )
 
-    # assert F.shape == (3, 3)
-    # assert F[2, 2] == 1
-    # assert np.linalg.matrix_rank(F) == 2
+    assert F.shape == (3, 3)
+    assert F[2, 2] == 1
+    assert np.linalg.matrix_rank(F) == 2
 
     # Simple Tests to verify your implementation:
     from scipy.spatial.transform import Rotation as sRot
@@ -270,13 +296,16 @@ if __name__ == "__main__":
     Call the bundleAdjustment function to optimize the extrinsics and 3D points
     Plot the 3D points before and after bundle adjustment using the plot_3D_dual function
     """
-    F, inliers = ransacF(pts1, pts2, M=np.max([*im1.shape, *im2.shape]), nIters=100, tol=6)
-    inliers = inliers.reshape(len(inliers),)
 
-    pts1_, pts2_ = pts1[inliers, :], pts2[inliers, :]
-    M2_init, C2, P_init = findM2(F, pts1_, pts2_, intrinsics)
-    M1 = np.hstack((np.identity(3), np.zeros(3)[:, np.newaxis]))
-    M2, P, obj_start, obj_end = bundleAdjustment(
-        K1, M1, pts1_, K2, M2_init, pts2_, P_init)
-    print("obj_start:", obj_start, "obj_end:", obj_end)
+    #TODO: !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!Update the Code!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+    M = np.max([*im1.shape, *im2.shape])
+    F, inliers_idx = ransacF(pts1, pts2, M=M, nIters=100, tol=6)
+
+    inliers_pts1 = pts1[inliers_idx]
+    inliers_pts2 = pts2[inliers_idx]
+    M2_init, C2, P_init = findM2(F, inliers_pts1, inliers_pts2, intrinsics)
+
+    M1 = np.concatenate([np.identity(3), np.zeros(3)[:, np.newaxis]], axis=1)
+    M2, P, obj_start, obj_end = bundleAdjustment(K1, M1, inliers_pts1, K2, M2_init, inliers_pts2, P_init)
+
     plot_3D_dual(P_init, P)
